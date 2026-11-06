@@ -27,3 +27,5 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     </html>
   );
 }
+
+// Force Vercel rebuild for Supabase keys
