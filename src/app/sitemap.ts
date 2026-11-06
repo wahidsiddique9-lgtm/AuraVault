@@ -3,12 +3,10 @@ import { connection } from "next/server";
 import { getPublishedArticles } from "@/lib/articles";
 import { getPublishedAssets } from "@/lib/assets";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getSiteUrl } from "@/lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await connection();
-  const siteUrl = getSiteUrl();
-  if (!siteUrl) return [];
+  const siteUrl = new URL("https://the-auravault.vercel.app");
 
   const urls: MetadataRoute.Sitemap = ["/", "/images", "/documents", "/journal"].map((path) => ({
     url: new URL(path, siteUrl).toString(),
