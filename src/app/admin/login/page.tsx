@@ -6,8 +6,12 @@ import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase
 export const metadata = { title: "Admin sign in | AuraVault", robots: { index: false, follow: false } };
 export const instant = false;
 
-export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ setup?: string; unauthorized?: string }> }) {
+export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ unauthorized?: string }> }) {
   const query = await searchParams;
+  const supabaseConfigured = isSupabaseConfigured();
+  console.log("Env check:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Exists" : "Missing");
+  console.log("Anon key check:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Exists" : "Missing");
+  console.log("Supabase config validation:", supabaseConfigured ? "Passed" : "Failed");
   const supabase = await createSupabaseServerClient();
   let signedInWithoutAdminAccess = false;
   if (supabase) {
@@ -26,7 +30,7 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
       <p className="eyebrow"><span className="eyebrow-line" /> PRIVATE CONTROL PANEL</p>
       <h1>Administrator<br /><em>sign in.</em></h1>
       <p className="admin-login-copy">Access is limited to accounts explicitly authorized by the AuraVault owner.</p>
-      {query.setup || !isSupabaseConfigured() ? <div className="admin-setup-note">Supabase is not configured. Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, then apply the inventory migrations.</div> : null}
+      {!supabaseConfigured ? <div className="admin-setup-note">Supabase configuration is unavailable. Verify <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are set to valid values.</div> : null}
       {query.unauthorized || signedInWithoutAdminAccess ? <p className="admin-form-error" role="alert">This account does not have administrator access.</p> : null}
       <AdminLoginForm />
       <p className="admin-no-signup">Admin accounts are provisioned privately. There is no public admin registration.</p>
