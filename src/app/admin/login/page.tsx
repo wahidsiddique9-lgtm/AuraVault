@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { AdminLoginForm } from "@/components/AdminLoginForm";
-import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Admin sign in | AuraVault", robots: { index: false, follow: false } };
 export const instant = false;
 
 export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ unauthorized?: string }> }) {
+  await connection();
   const query = await searchParams;
-  const supabaseConfigured = isSupabaseConfigured();
-  console.log("Env check:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Exists" : "Missing");
-  console.log("Anon key check:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Exists" : "Missing");
-  console.log("Supabase config validation:", supabaseConfigured ? "Passed" : "Failed");
   const supabase = await createSupabaseServerClient();
+  const supabaseConfigured = Boolean(supabase);
   let signedInWithoutAdminAccess = false;
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();
