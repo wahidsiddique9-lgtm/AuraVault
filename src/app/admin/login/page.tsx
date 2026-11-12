@@ -12,6 +12,7 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
   const query = await searchParams;
   const { client: supabase, diagnostic: configDiagnostic } = await createSupabaseServerClientWithDiagnostic();
   const supabaseConfigured = Boolean(supabase);
+  const configurationIssues = configDiagnostic.reasonCodes.filter((code) => code !== "CONFIG_VALID");
   console.info("[admin-login] Supabase config diagnostic", {
     ...configDiagnostic,
     serverClientCreated: supabaseConfigured,
@@ -33,7 +34,7 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
       <p className="eyebrow"><span className="eyebrow-line" /> PRIVATE CONTROL PANEL</p>
       <h1>Administrator<br /><em>sign in.</em></h1>
       <p className="admin-login-copy">Access is limited to accounts explicitly authorized by the AuraVault owner.</p>
-      {!supabaseConfigured ? <div className="admin-setup-note">Supabase configuration is unavailable. Verify <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are set to valid values.</div> : null}
+      {!supabaseConfigured ? <div className="admin-setup-note">Supabase configuration is unavailable ({configurationIssues.join(", ") || "CLIENT_INITIALIZATION_FAILED"}). Verify <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are set for this Vercel environment, then redeploy.</div> : null}
       {query.unauthorized || signedInWithoutAdminAccess ? <p className="admin-form-error" role="alert">This account does not have administrator access.</p> : null}
       <AdminLoginForm />
       <p className="admin-no-signup">Admin accounts are provisioned privately. There is no public admin registration.</p>

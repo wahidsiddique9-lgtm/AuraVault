@@ -43,7 +43,7 @@ function isValidUrl(url: string) {
 }
 
 function isValidAnonKey(key: string) {
-  if (/^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(key)) return true;
+  if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return true;
   const segments = key.split(".");
-  return key.length >= 100 && segments.length === 3 && segments.every((segment) => /^[A-Za-z0-9_-]+$/.test(segment));
+  return segments.length === 3 && segments.every((segment) => /^[A-Za-z0-9_-]+$/.test(segment));
 }
