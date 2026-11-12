@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { AdminLoginForm } from "@/components/AdminLoginForm";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClientWithDiagnostic } from "@/lib/supabase/server";
 
 export const metadata = { title: "Admin sign in | AuraVault", robots: { index: false, follow: false } };
 export const instant = false;
@@ -10,8 +10,12 @@ export const instant = false;
 export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ unauthorized?: string }> }) {
   await connection();
   const query = await searchParams;
-  const supabase = await createSupabaseServerClient();
+  const { client: supabase, diagnostic: configDiagnostic } = await createSupabaseServerClientWithDiagnostic();
   const supabaseConfigured = Boolean(supabase);
+  console.info("[admin-login] Supabase config diagnostic", {
+    ...configDiagnostic,
+    serverClientCreated: supabaseConfigured,
+  });
   let signedInWithoutAdminAccess = false;
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();

@@ -1,19 +1,45 @@
 export type SupabasePublicConfig = { url: string; anonKey: string };
+export type SupabasePublicConfigDiagnostic = {
+  urlPresent: boolean;
+  keyPresent: boolean;
+  urlValid: boolean;
+  keyFormatValid: boolean;
+  reasonCodes: string[];
+};
 
-export function getSupabasePublicConfig(): SupabasePublicConfig | null {
+export function getSupabasePublicConfigState() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !anonKey || !isValidAnonKey(anonKey)) return null;
+  const urlPresent = Boolean(url);
+  const keyPresent = Boolean(anonKey);
+  const urlValid = Boolean(url && isValidUrl(url));
+  const keyFormatValid = Boolean(anonKey && isValidAnonKey(anonKey));
+  const reasonCodes: string[] = [];
 
+  if (!urlPresent) reasonCodes.push("URL_MISSING");
+  else if (!urlValid) reasonCodes.push("URL_INVALID");
+  if (!keyPresent) reasonCodes.push("KEY_MISSING");
+  else if (!keyFormatValid) reasonCodes.push("KEY_FORMAT_INVALID");
+  if (urlValid && keyFormatValid) reasonCodes.push("CONFIG_VALID");
+
+  return {
+    config: url && anonKey && urlValid && keyFormatValid ? { url, anonKey } : null,
+    diagnostic: { urlPresent, keyPresent, urlValid, keyFormatValid, reasonCodes },
+  };
+}
+
+export function getSupabasePublicConfig(): SupabasePublicConfig | null {
+  return getSupabasePublicConfigState().config;
+}
+
+function isValidUrl(url: string) {
   try {
     const parsedUrl = new URL(url);
     const isLocalDevelopment = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
-    if (parsedUrl.protocol !== "https:" && !(isLocalDevelopment && parsedUrl.protocol === "http:")) return null;
+    return parsedUrl.protocol === "https:" || (isLocalDevelopment && parsedUrl.protocol === "http:");
   } catch {
-    return null;
+    return false;
   }
-
-  return { url, anonKey };
 }
 
 function isValidAnonKey(key: string) {
