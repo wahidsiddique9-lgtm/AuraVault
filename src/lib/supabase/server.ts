@@ -2,12 +2,31 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabasePublicConfig, getSupabasePublicConfigState } from "@/lib/supabase/config";
 
+export class SupabaseCookieAccessError extends Error {
+  constructor() {
+    super("Supabase cookie access failed.");
+    this.name = "SupabaseCookieAccessError";
+  }
+}
+
+export class SupabaseCookieWriteError extends Error {
+  constructor() {
+    super("Supabase cookie write failed.");
+    this.name = "SupabaseCookieWriteError";
+  }
+}
+
 export function isSupabaseConfigured() {
   return getSupabasePublicConfig() !== null;
 }
 
 async function createClient(config: NonNullable<ReturnType<typeof getSupabasePublicConfig>>, options: { requireCookieWrites?: boolean }) {
-  const cookieStore = await cookies();
+  let cookieStore;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    throw new SupabaseCookieAccessError();
+  }
   return createServerClient(config.url, config.anonKey, {
     cookies: {
       getAll() {
@@ -15,7 +34,11 @@ async function createClient(config: NonNullable<ReturnType<typeof getSupabasePub
       },
       setAll(cookiesToSet) {
         if (options.requireCookieWrites) {
-          cookiesToSet.forEach(({ name, value, options: cookieOptions }) => cookieStore.set(name, value, cookieOptions));
+          try {
+            cookiesToSet.forEach(({ name, value, options: cookieOptions }) => cookieStore.set(name, value, cookieOptions));
+          } catch {
+            throw new SupabaseCookieWriteError();
+          }
           return;
         }
         try {

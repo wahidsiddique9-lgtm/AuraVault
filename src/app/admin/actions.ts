@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isRetryableSupabaseError, requireAdmin, requireAdminForAction, safeAuthErrorDetails } from "@/lib/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicConfigState } from "@/lib/supabase/config";
+import { createSupabaseServerClient, SupabaseCookieAccessError, SupabaseCookieWriteError } from "@/lib/supabase/server";
 
 const bucketName = "marketplace-assets";
 const originalsBucketName = "marketplace-originals";
@@ -53,17 +54,46 @@ async function hasConfirmedPurchases(supabase: Awaited<ReturnType<typeof require
   return ordersError || Boolean(orders?.length);
 }
 
-export type AdminLoginState = { error: string };
+export type AdminLoginState = { error: string; diagnosticCode?: string };
+
+function adminLoginDiagnosticCode(error: unknown, stage: "client" | "request" | "response") {
+  if (error instanceof SupabaseCookieAccessError) return "AUTH_COOKIE_ACCESS_FAILED";
+  if (error instanceof SupabaseCookieWriteError) return "AUTH_COOKIE_WRITE_FAILED";
+
+  const details = safeAuthErrorDetails(error);
+  if (details.status === 429) return "AUTH_RATE_LIMITED";
+  if (details.status !== null && details.status >= 500) return "AUTH_API_SERVER_ERROR";
+  if (details.code === "invalid_credentials") return "AUTH_CREDENTIALS_REJECTED";
+  if (details.code === "refresh_token_already_used") return "AUTH_SESSION_REFRESH_CONFLICT";
+  if (details.name === "AuthRetryableFetchError" || details.code === "request_timeout") return "AUTH_NETWORK_ERROR";
+  if (details.status !== null) return `AUTH_API_REJECTED_${details.status}`;
+
+  const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+    ? error.message
+    : "";
+  if (/network|fetch|timeout/i.test(message)) return "AUTH_NETWORK_ERROR";
+  if (stage === "client") return "AUTH_CLIENT_INITIALIZATION_FAILED";
+  return stage === "response" ? "AUTH_API_REJECTED" : "AUTH_REQUEST_FAILED";
+}
 
 export async function loginAdmin(_previousState: AdminLoginState, formData: FormData): Promise<AdminLoginState> {
+  const { config, diagnostic } = getSupabasePublicConfigState();
+  if (!config) {
+    const configurationIssues = diagnostic.reasonCodes.filter((code) => code !== "CONFIG_VALID");
+    const diagnosticCode = configurationIssues.map((code) => `SUPABASE_${code}`).join("_AND_") || "SUPABASE_CONFIG_UNAVAILABLE";
+    console.warn("[auth] Admin sign-in configuration unavailable", { diagnosticCode });
+    return { error: "Admin sign-in is unavailable until Supabase is configured.", diagnosticCode };
+  }
+
   let supabase;
   try {
     supabase = await createSupabaseServerClient({ requireCookieWrites: true });
   } catch (error) {
-    console.warn("[auth] Admin sign-in client setup failed", safeAuthErrorDetails(error));
-    return { error: "Supabase is temporarily unavailable. Your sign-in was not completed; try again shortly." };
+    const diagnosticCode = adminLoginDiagnosticCode(error, "client");
+    console.warn("[auth] Admin sign-in client setup failed", { diagnosticCode, ...safeAuthErrorDetails(error) });
+    return { error: "Supabase is temporarily unavailable. Your sign-in was not completed; try again shortly.", diagnosticCode };
   }
-  if (!supabase) return { error: "Admin sign-in is unavailable until Supabase is configured." };
+  if (!supabase) return { error: "Admin sign-in is unavailable until Supabase is configured.", diagnosticCode: "SUPABASE_CLIENT_UNAVAILABLE" };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -73,16 +103,19 @@ export async function loginAdmin(_previousState: AdminLoginState, formData: Form
   try {
     result = await supabase.auth.signInWithPassword({ email, password });
   } catch (error) {
-    console.warn("[auth] Admin sign-in request failed", safeAuthErrorDetails(error));
-    return { error: "Supabase is temporarily unavailable. Your sign-in was not completed; try again shortly." };
+    const diagnosticCode = adminLoginDiagnosticCode(error, "request");
+    console.warn("[auth] Admin sign-in request failed", { diagnosticCode, ...safeAuthErrorDetails(error) });
+    return { error: "Supabase is temporarily unavailable. Your sign-in was not completed; try again shortly.", diagnosticCode };
   }
   const { data, error } = result;
   if (error) {
-    console.warn("[auth] Admin sign-in rejected", safeAuthErrorDetails(error));
+    const diagnosticCode = adminLoginDiagnosticCode(error, "response");
+    console.warn("[auth] Admin sign-in rejected", { diagnosticCode, ...safeAuthErrorDetails(error) });
     return {
       error: isRetryableSupabaseError(error)
         ? "Supabase is temporarily unavailable. Your sign-in was not completed; try again shortly."
         : "Email or password is incorrect.",
+      diagnosticCode,
     };
   }
   if (!data.user) return { error: "Email or password is incorrect." };
